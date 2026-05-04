@@ -2,6 +2,9 @@ import 'dotenv/config';
 import { createWhatsAppClient } from './whatsapp/client.js';
 import { handleMessage } from './handlers/message.js';
 import { logger } from './utils/logger.js';
+// ── QR Server (solo para setup inicial) ──────────────────────────────────
+import { createServer } from 'http';
+import { readFileSync, existsSync } from 'fs';
 
 async function main() {
   logger.info('🚀 Iniciando Finanzas Bot...');
@@ -54,4 +57,16 @@ async function main() {
 main().catch((err) => {
   logger.error({ err }, 'Error fatal al iniciar el bot');
   process.exit(1);
+});
+
+createServer((req, res) => {
+  if (req.url === '/qr' && existsSync('./qr.png')) {
+    res.writeHead(200, { 'Content-Type': 'image/png' });
+    res.end(readFileSync('./qr.png'));
+  } else {
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    res.end('Bot corriendo. Ve a /qr para ver el código QR.');
+  }
+}).listen(process.env.PORT || 3000, () => {
+  logger.info(`🌐 Servidor QR en puerto ${process.env.PORT || 3000} → visita /qr`);
 });
