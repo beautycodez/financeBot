@@ -5,7 +5,7 @@ import {
   fetchLatestBaileysVersion,
   makeCacheableSignalKeyStore,
 } from '@whiskeysockets/baileys';
-import qrcode from 'qrcode-terminal';
+import QRCode from 'qrcode';
 import { Boom } from '@hapi/boom';
 import { logger } from '../utils/logger.js';
 
@@ -27,36 +27,35 @@ export async function createWhatsAppClient() {
     syncFullHistory: false,
   });
 
-  // Guardar credenciales cuando cambien
   sock.ev.on('creds.update', saveCreds);
 
-  // Manejar conexión / desconexión / QR
   sock.ev.on('connection.update', async (update) => {
     const { connection, lastDisconnect, qr } = update;
 
     if (qr) {
-      logger.info('📱 Escanea este QR con tu WhatsApp:');
-      qrcode.generate(qr, { small: true });
+      // Guardar como imagen PNG en disco (descargable desde Railway Volume)
+      await QRCode.toFile('./qr.png', qr, { width: 400 });
+      logger.info('╔══════════════════════════════════════╗');
+      logger.info('║  QR guardado en: ./qr.png            ║');
+      logger.info('║  Descárgalo y escanéalo con WhatsApp ║');
+      logger.info('╚══════════════════════════════════════╝');
+
+      // Imprimir también en terminal línea a línea
+      const qrText = await QRCode.toString(qr, { type: 'terminal', small: true });
+      for (const line of qrText.split('\n')) process.stdout.write(line + '\n');
     }
 
     if (connection === 'close') {
       const statusCode = new Boom(lastDisconnect?.error)?.output?.statusCode;
-      const isConflict = statusCode === 440;
-      const isLoggedOut = statusCode === DisconnectReason.loggedOut;
-      const shouldReconnect = !isLoggedOut && !isConflict;
+      const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
 
       logger.warn(`Conexión cerrada. Código: ${statusCode}. Reconectar: ${shouldReconnect}`);
-
-      if (isConflict) {
-        logger.error('La sesión fue reemplazada por otra conexión (conflict 440). Detén otras instancias o reinicia después de borrar auth_info si es necesario.');
-        process.exit(1);
-      }
 
       if (shouldReconnect) {
         logger.info('Reconectando en 5 segundos...');
         setTimeout(() => createWhatsAppClient(), 5000);
       } else {
-        logger.error('Sesión cerrada (logged out). Borra la carpeta auth_info y reinicia.');
+        logger.error('Sesión cerrada (logged out). Borra auth_info y reinicia.');
         process.exit(1);
       }
     }
