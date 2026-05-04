@@ -1,38 +1,25 @@
-import { google } from "googleapis";
-import { logger } from "../utils/logger.js";
+import { google } from 'googleapis';
+import { logger } from '../utils/logger.js';
+import { readFileSync } from 'fs';
 
-const SHEET_MOV = process.env.SHEET_MOVIMIENTOS || "📋 Movimientos";
-const SHEET_PRES = process.env.SHEET_PRESUPUESTO || "💼 Presupuesto";
-const SHEET_EST = process.env.SHEET_ESTADO || "📊 Estado Financiero";
-const SHEET_ID = process.env.GOOGLE_SHEET_ID;
-
-// Columnas de la pestaña Movimientos (índice 0)
-// B=tipo, C=fecha, D=descripción, E=categoría, F=cuenta_origen, G=monto, H=cuenta_destino, I=notas
-const MOV_COLS = {
-  tipo: 1, // col B
-  fecha: 2, // col C
-  descripcion: 3, // col D
-  categoria: 4, // col E
-  cuenta_origen: 5, // col F
-  monto: 6, // col G
-  cuenta_dest: 7, // col H
-  notas: 8, // col I
-};
+const SHEET_MOV  = process.env.SHEET_MOVIMIENTOS || '📋 Movimientos';
+const SHEET_PRES = process.env.SHEET_PRESUPUESTO  || '💼 Presupuesto';
+const SHEET_EST  = process.env.SHEET_ESTADO       || '📊 Estado Financiero';
+const SHEET_ID   = process.env.GOOGLE_SHEET_ID;
 
 let sheetsClient = null;
 
 async function getClient() {
   if (sheetsClient) return sheetsClient;
-
   const credentials = JSON.parse(process.env.GOOGLE_CREDENTIALS_JSON);
   const auth = new google.auth.GoogleAuth({
     credentials,
-    scopes: ["https://www.googleapis.com/auth/spreadsheets"],
+    scopes: ['https://www.googleapis.com/auth/spreadsheets'],
   });
-  sheetsClient = google.sheets({ version: "v4", auth });
+
+  sheetsClient = google.sheets({ version: 'v4', auth });
   return sheetsClient;
 }
-
 // ── LEER ──────────────────────────────────────────────────────────────────────
 
 export async function getLastMovimientos(n = 5) {
