@@ -1,14 +1,14 @@
-import Anthropic from '@anthropic-ai/sdk';
-import { CUENTAS_VALIDAS, CATEGORIAS_VALIDAS } from '../sheets/client.js';
-import { logger } from '../utils/logger.js';
+import Anthropic from "@anthropic-ai/sdk";
+import { CUENTAS_VALIDAS, CATEGORIAS_VALIDAS } from "../sheets/client.js";
+import { logger } from "../utils/logger.js";
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 const SYSTEM_PROMPT = `Eres el asistente financiero personal de un usuario peruano. 
 Tu tarea es interpretar mensajes en lenguaje natural y extraer información de movimientos financieros.
 
-CUENTAS VÁLIDAS: ${CUENTAS_VALIDAS.join(', ')}
-CATEGORÍAS VÁLIDAS: ${CATEGORIAS_VALIDAS.join(', ')}
+CUENTAS VÁLIDAS: ${CUENTAS_VALIDAS.join(", ")}
+CATEGORÍAS VÁLIDAS: ${CATEGORIAS_VALIDAS.join(", ")}
 
 TIPOS DE MOVIMIENTO:
 - INGRESO: cuando el usuario recibe dinero (salario, cobro, etc.)
@@ -58,39 +58,51 @@ Si no se puede interpretar:
 }`;
 
 export async function parseMessage(text) {
-  const today = new Date().toLocaleDateString('es-PE', {
-    timeZone: process.env.TZ || 'America/Lima',
-    day: '2-digit', month: '2-digit', year: 'numeric'
+  const today = new Date().toLocaleDateString("es-PE", {
+    timeZone: process.env.TZ || "America/Lima",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
   });
 
   try {
     const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: "claude-sonnet-4-5",
       max_tokens: 512,
       system: SYSTEM_PROMPT,
       messages: [
         {
-          role: 'user',
-          content: `Fecha de hoy: ${today}\nMensaje del usuario: "${text}"`
-        }
+          role: "user",
+          content: `Fecha de hoy: ${today}\nMensaje del usuario: "${text}"`,
+        },
       ],
     });
 
     const raw = response.content[0].text.trim();
-    const parsed = JSON.parse(raw);
-    logger.debug({ parsed }, 'Mensaje interpretado');
-    return parsed;
 
+    // 🔧 limpiar markdown si existe
+    const clean = raw
+      .replace(/```json/g, "")
+      .replace(/```/g, "")
+      .trim();
+
+    const parsed = JSON.parse(clean);
+    logger.debug({ parsed }, "Mensaje interpretado");
+    return parsed;
   } catch (err) {
-    logger.error({ err }, 'Error en parseMessage');
-    return { intent: 'desconocido', mensaje: 'Error al interpretar el mensaje.' };
+    logger.error({ err }, "Error en parseMessage");
+    return {
+      intent: "desconocido",
+      mensaje: "Error al interpretar el mensaje.",
+    };
   }
 }
 
 // Confirmación de movimiento ambiguo
 export async function confirmMovimiento(sock, jid, parsed) {
-  const emoji = parsed.tipo === 'INGRESO' ? '💰' : parsed.tipo === 'GASTO' ? '💸' : '🔄';
-  const dest = parsed.cuenta_destino ? ` → ${parsed.cuenta_destino}` : '';
+  const emoji =
+    parsed.tipo === "INGRESO" ? "💰" : parsed.tipo === "GASTO" ? "💸" : "🔄";
+  const dest = parsed.cuenta_destino ? ` → ${parsed.cuenta_destino}` : "";
 
   const msg =
     `${emoji} *¿Confirmas este movimiento?*\n\n` +
@@ -99,7 +111,7 @@ export async function confirmMovimiento(sock, jid, parsed) {
     `• Descripción: ${parsed.descripcion}\n` +
     `• Categoría: ${parsed.categoria}\n` +
     `• Cuenta: ${parsed.cuenta_origen}${dest}\n` +
-    `• Fecha: ${parsed.fecha === 'hoy' ? 'Hoy' : parsed.fecha}\n\n` +
+    `• Fecha: ${parsed.fecha === "hoy" ? "Hoy" : parsed.fecha}\n\n` +
     `Responde *sí* para confirmar o *no* para cancelar.`;
 
   await sock.sendMessage(jid, { text: msg });

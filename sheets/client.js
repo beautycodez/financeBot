@@ -11,9 +11,8 @@ let sheetsClient = null;
 
 async function getClient() {
   if (sheetsClient) return sheetsClient;
-  const credentials = JSON.parse(process.env.GOOGLE_CREDENTIALS_JSON);
   const auth = new google.auth.GoogleAuth({
-    credentials,
+    keyFile: './google-credentials.json',
     scopes: ['https://www.googleapis.com/auth/spreadsheets'],
   });
 
