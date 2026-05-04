@@ -10,11 +10,25 @@ if (process.env.CLEAR_SESSION === 'true') {
   if (existsSync('./auth_info')) {
     rmSync('./auth_info', { recursive: true, force: true });
     logger.info('🗑️ Sesión borrada. Quita CLEAR_SESSION=true y redeploy.');
-  } else {
+  } else { 
     logger.info('ℹ️ No había sesión que borrar.');
   }
   process.exit(0);
 }
+
+// ── QR Server arranca PRIMERO para pasar el health check de Railway ────────
+const PORT = process.env.PORT || 3000;
+createServer((req, res) => {
+  if (req.url === '/qr' && existsSync('./qr.png')) {
+    res.writeHead(200, { 'Content-Type': 'image/png' });
+    res.end(readFileSync('./qr.png'));
+  } else {
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    res.end('Bot corriendo. Ve a /qr para ver el QR.');
+  }
+}).listen(PORT, '0.0.0.0', () => {
+  logger.info(`🌐 Servidor HTTP listo en puerto ${PORT}`);
+});
 
 async function main() {
   logger.info('🚀 Iniciando Finanzas Bot...');
@@ -78,17 +92,4 @@ async function main() {
 main().catch((err) => {
   logger.error({ err }, 'Error fatal al iniciar el bot');
   process.exit(1);
-});
-
-// ── QR Server ─────────────────────────────────────────────────────────────
-createServer((req, res) => {
-  if (req.url === '/qr' && existsSync('./qr.png')) {
-    res.writeHead(200, { 'Content-Type': 'image/png' });
-    res.end(readFileSync('./qr.png'));
-  } else {
-    res.writeHead(200, { 'Content-Type': 'text/plain' });
-    res.end('Bot corriendo. Ve a /qr para ver el QR.');
-  }
-}).listen(process.env.PORT || 3000, () => {
-  logger.info(`🌐 Servidor QR en puerto ${process.env.PORT || 3000}`);
 });
