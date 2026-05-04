@@ -2,7 +2,6 @@ import 'dotenv/config';
 import { createWhatsAppClient } from './whatsapp/client.js';
 import { handleMessage } from './handlers/message.js';
 import { logger } from './utils/logger.js';
-// ── QR Server (solo para setup inicial) ──────────────────────────────────
 import { createServer } from 'http';
 import { readFileSync, existsSync } from 'fs';
 
@@ -25,20 +24,35 @@ async function main() {
     if (type !== 'notify') return;
 
     for (const msg of messages) {
-      // Ignorar status broadcast
+      // Ignorar status broadcast y grupos
       if (msg.key.remoteJid === 'status@broadcast') continue;
       if (msg.key.remoteJid.endsWith('@g.us')) continue;
 
-      const senderNumber = msg.key.remoteJid.replace('@s.whatsapp.net', '');
-      const textContent = msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
+      // Normalizar JID — Railway puede usar @lid en vez de @s.whatsapp.net
+      const senderJid = msg.key.remoteJid;
+      const senderNumber = senderJid
+        .replace('@s.whatsapp.net', '')
+        .replace('@lid', '');
 
-      logger.info(`🔍 fromMe=${msg.key.fromMe} sender=${senderNumber} owner=${process.env.OWNER_PHONE} texto="${textContent}"`);
+      const textContent =
+        msg.message?.conversation ||
+        msg.message?.extendedTextMessage?.text ||
+        '';
 
-      // Aceptar mensajes propios (de ti a ti mismo) O del owner
-      if (!msg.key.fromMe && senderNumber !== process.env.OWNER_PHONE) {
-        logger.warn(`Mensaje rechazado de número no autorizado: ${senderNumber}`);
+      logger.info(`🔍 fromMe=${msg.key.fromMe} jid=${senderJid} sender=${senderNumber} owner=${process.env.OWNER_PHONE} texto="${textContent}"`);
+
+      // Aceptar: mensajes propios (fromMe) O del número owner
+      const isOwner =
+        msg.key.fromMe === true ||
+        senderNumber === process.env.OWNER_PHONE;
+
+      if (!isOwner) {
+        logger.warn(`Rechazado: número no autorizado ${senderJid}`);
         continue;
       }
+
+      // Ignorar mensajes sin texto
+      if (!textContent) continue;
 
       try {
         await handleMessage(sock, msg);
@@ -59,14 +73,15 @@ main().catch((err) => {
   process.exit(1);
 });
 
+// ── QR Server (setup inicial) ─────────────────────────────────────────────
 createServer((req, res) => {
   if (req.url === '/qr' && existsSync('./qr.png')) {
     res.writeHead(200, { 'Content-Type': 'image/png' });
     res.end(readFileSync('./qr.png'));
   } else {
     res.writeHead(200, { 'Content-Type': 'text/plain' });
-    res.end('Bot corriendo. Ve a /qr para ver el código QR.');
+    res.end('Bot corriendo. Ve a /qr para ver el QR.');
   }
 }).listen(process.env.PORT || 3000, () => {
-  logger.info(`🌐 Servidor QR en puerto ${process.env.PORT || 3000} → visita /qr`);
+  logger.info(`🌐 Servidor QR en puerto ${process.env.PORT || 3000}`);
 });
