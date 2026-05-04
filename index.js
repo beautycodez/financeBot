@@ -69,17 +69,20 @@ async function main() {
 }
 
 main().catch((err) => {
-  // Limpiar sesión si se pide (solo una vez)
-if (process.env.CLEAR_SESSION === 'true') {
+  logger.error({ err }, 'Error fatal al iniciar el bot');
+      // Limpiar sesión si se pide (solo una vez)
+
+  if (process.env.CLEAR_SESSION === 'true') {
   const { rmSync, existsSync } = await import('fs');
+
   if (existsSync('./auth_info')) {
     rmSync('./auth_info', { recursive: true, force: true });
     logger.info('🗑️ Sesión borrada. Quita CLEAR_SESSION=true y redeploy.');
     process.exit(0);
   }
   }
-  logger.error({ err }, 'Error fatal al iniciar el bot');
   process.exit(1);
+
 });
 
 // ── QR Server (setup inicial) ─────────────────────────────────────────────
