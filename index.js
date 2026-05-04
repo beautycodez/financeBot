@@ -3,7 +3,18 @@ import { createWhatsAppClient } from './whatsapp/client.js';
 import { handleMessage } from './handlers/message.js';
 import { logger } from './utils/logger.js';
 import { createServer } from 'http';
-import { readFileSync, existsSync } from 'fs';
+import { readFileSync, existsSync, rmSync } from 'fs';
+
+// ── Limpiar sesión si se pide (antes de todo) ─────────────────────────────
+if (process.env.CLEAR_SESSION === 'true') {
+  if (existsSync('./auth_info')) {
+    rmSync('./auth_info', { recursive: true, force: true });
+    logger.info('🗑️ Sesión borrada. Quita CLEAR_SESSION=true y redeploy.');
+  } else {
+    logger.info('ℹ️ No había sesión que borrar.');
+  }
+  process.exit(0);
+}
 
 async function main() {
   logger.info('🚀 Iniciando Finanzas Bot...');
@@ -11,8 +22,8 @@ async function main() {
   const sock = await createWhatsAppClient();
 
   sock.ev.on('messages.upsert', async ({ messages, type }) => {
-    // DEBUG — muestra TODO lo que llega
     logger.info(`📨 messages.upsert tipo="${type}" cantidad=${messages.length}`);
+
     for (const m of messages) {
       logger.info({
         remoteJid: m.key.remoteJid,
@@ -24,11 +35,9 @@ async function main() {
     if (type !== 'notify') return;
 
     for (const msg of messages) {
-      // Ignorar status broadcast y grupos
       if (msg.key.remoteJid === 'status@broadcast') continue;
       if (msg.key.remoteJid.endsWith('@g.us')) continue;
 
-      // Normalizar JID — Railway puede usar @lid en vez de @s.whatsapp.net
       const senderJid = msg.key.remoteJid;
       const senderNumber = senderJid
         .replace('@s.whatsapp.net', '')
@@ -41,7 +50,6 @@ async function main() {
 
       logger.info(`🔍 fromMe=${msg.key.fromMe} jid=${senderJid} sender=${senderNumber} owner=${process.env.OWNER_PHONE} texto="${textContent}"`);
 
-      // Aceptar: mensajes propios (fromMe) O del número owner
       const isOwner =
         msg.key.fromMe === true ||
         senderNumber === process.env.OWNER_PHONE;
@@ -51,7 +59,6 @@ async function main() {
         continue;
       }
 
-      // Ignorar mensajes sin texto
       if (!textContent) continue;
 
       try {
@@ -70,22 +77,10 @@ async function main() {
 
 main().catch((err) => {
   logger.error({ err }, 'Error fatal al iniciar el bot');
-      // Limpiar sesión si se pide (solo una vez)
-
-  if (process.env.CLEAR_SESSION === 'true') {
-  const { rmSync, existsSync } = await import('fs');
-
-  if (existsSync('./auth_info')) {
-    rmSync('./auth_info', { recursive: true, force: true });
-    logger.info('🗑️ Sesión borrada. Quita CLEAR_SESSION=true y redeploy.');
-    process.exit(0);
-  }
-  }
   process.exit(1);
-
 });
 
-// ── QR Server (setup inicial) ─────────────────────────────────────────────
+// ── QR Server ─────────────────────────────────────────────────────────────
 createServer((req, res) => {
   if (req.url === '/qr' && existsSync('./qr.png')) {
     res.writeHead(200, { 'Content-Type': 'image/png' });
