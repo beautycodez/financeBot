@@ -16,16 +16,20 @@ export async function createWhatsAppClient() {
   logger.info(`Usando Baileys v${version.join('.')}`);
 
   const sock = makeWASocket({
-    version,
-    auth: {
-      creds: state.creds,
-      keys: makeCacheableSignalKeyStore(state.keys, logger),
-    },
-    printQRInTerminal: false,
-    logger: logger.child({ level: 'silent' }),
-    generateHighQualityLinkPreview: false,
-    syncFullHistory: false,
-  });
+  version,
+  auth: {
+    creds: state.creds,
+    keys: makeCacheableSignalKeyStore(state.keys, logger),
+  },
+  printQRInTerminal: false,
+  logger: logger.child({ level: 'silent' }),
+  generateHighQualityLinkPreview: false,
+  syncFullHistory: false,
+  // ── Agregado ──
+  markOnlineOnConnect: false,
+  retryRequestDelayMs: 10000,
+  getMessage: async () => undefined, // evita intentar descifrar mensajes viejos
+});
 
   sock.ev.on('creds.update', saveCreds);
 
